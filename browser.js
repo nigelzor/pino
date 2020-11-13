@@ -19,6 +19,7 @@ var stdSerializers = {
 function pino (opts) {
   opts = opts || {}
   opts.browser = opts.browser || {}
+  opts.hooks = opts.hooks || {}
 
   var transmit = opts.browser.transmit
   if (transmit && typeof transmit.send !== 'function') { throw Error('pino: transmit option must have a send function') }
@@ -62,7 +63,8 @@ function pino (opts) {
     serialize,
     asObject: opts.browser.asObject,
     levels,
-    timestamp: getTimeFunction(opts)
+    timestamp: getTimeFunction(opts),
+    hook: opts.hooks.logMethod
   }
   logger.levels = pino.levels
   logger.level = level
@@ -175,7 +177,13 @@ function wrap (opts, logger, level) {
   if (!opts.transmit && logger[level] === noop) return
 
   logger[level] = (function (write) {
-    return function LOG () {
+    if (!opts.hook) return LOG
+
+    return function hookWrappedLog (...args) {
+      opts.hook.call(this, args, LOG)
+    }
+
+    function LOG () {
       var ts = opts.timestamp()
       var args = new Array(arguments.length)
       var proto = (Object.getPrototypeOf && Object.getPrototypeOf(this) === _console) ? _console : this
